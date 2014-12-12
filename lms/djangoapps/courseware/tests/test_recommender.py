@@ -16,7 +16,6 @@ from xmodule.modulestore.tests.factories import CourseFactory, ItemFactory
 from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase, mixed_store_config
 
 from courseware.tests.helpers import LoginEnrollmentTestCase
-#from courseware.tests.modulestore_config import TEST_DATA_MIXED_MODULESTORE
 from courseware.tests.factories import GlobalStaffFactory
 
 from lms.lib.xblock.runtime import quote_slashes
@@ -24,7 +23,6 @@ from lms.lib.xblock.runtime import quote_slashes
 MODULESTORE_CONFIG = mixed_store_config(settings.COMMON_TEST_DATA_ROOT, {}, include_xml=False)
 
 
-#@override_settings(MODULESTORE=TEST_DATA_MIXED_MODULESTORE)
 @override_settings(MODULESTORE=MODULESTORE_CONFIG)
 class TestRecommender(ModuleStoreTestCase, LoginEnrollmentTestCase):
     """
