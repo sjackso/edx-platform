@@ -28,7 +28,10 @@ class TestRecommender(ModuleStoreTestCase, LoginEnrollmentTestCase):
     """
     Check that Recommender state is saved properly.
     """
-    STUDENT_INFO = [('view@test.com', 'foo'), ('view2@test.com', 'foo')]
+    STUDENTS = [
+        {'email': 'view@test.com', 'password': 'foo'},
+        {'email': 'view2@test.com', 'password': 'foo'}
+    ]
     XBLOCK_NAMES = ['recommender', 'recommender_second']
 
     def setUp(self):
@@ -103,11 +106,10 @@ class TestRecommender(ModuleStoreTestCase, LoginEnrollmentTestCase):
             }
         }
 
-        # Create student accounts and activate them.
-        for i, (email, password) in enumerate(self.STUDENT_INFO):
-            username = "u{}".format(i)
-            self.create_account(username, email, password)
-            self.activate_user(email)
+        for idx, student in enumerate(self.STUDENTS):
+            username = "u{}".format(idx)
+            self.create_account(username, student['email'], student['password'])
+            self.activate_user(student['email'])
 
         self.staff_user = GlobalStaffFactory()
 
@@ -151,24 +153,25 @@ class TestRecommender(ModuleStoreTestCase, LoginEnrollmentTestCase):
         for _ in range(0, times):
             self.client.post(url, json.dumps({'id': resource_id}), '')
 
-    def call_event(self, handler, event_data, xblock_name=None):
+    def call_event(self, handler, resource, xblock_name=None):
         """
-        Call a ajax event (add, edit, flag) on a resource by providing data
+        Call a ajax event (add, edit, flag, etc.) by specifying the resource
+        it takes
         """
         if xblock_name is None:
             xblock_name = TestRecommender.XBLOCK_NAMES[0]
         url = self.get_handler_url(handler, xblock_name)
-        resp = self.client.post(url, json.dumps(event_data), '')
+        resp = self.client.post(url, json.dumps(resource), '')
         return json.loads(resp.content)
 
-    def check_event_ele_in_response(self, handler, data, resp_key, resp_val, xblock_name=None):
+    def check_event_response_by_element(self, handler, resource, resp_key, resp_val, xblock_name=None):
         """
-        Call the event specified by the handler with the data,
-        and check whether the response is as expected
+        Call the event specified by the handler with the resource, and check
+        whether the element (resp_key) in response is as expected (resp_val)
         """
         if xblock_name is None:
             xblock_name = TestRecommender.XBLOCK_NAMES[0]
-        resp = self.call_event(handler, data, xblock_name)
+        resp = self.call_event(handler, resource, xblock_name)
         self.assertEqual(resp[resp_key], resp_val)
         self.assert_request_status_code(200, self.course_url)
 
@@ -181,7 +184,7 @@ class TestRecommenderCreateFromEmpty(TestRecommender):
         """
         Verify the addition of new resource is handled correctly
         """
-        self.enroll_student(self.STUDENT_INFO[0][0], self.STUDENT_INFO[0][1])
+        self.enroll_student(self.STUDENTS[0]['email'], self.STUDENTS[0]['password'])
         # Check whether adding new resource is successful
         for resource_id, resource in self.test_recommendations.iteritems():
             for xblock_name in self.XBLOCK_NAMES:
@@ -204,16 +207,17 @@ class TestRecommenderCreateFromEmpty(TestRecommender):
         Test the function for importing all resources into the Recommender
         by a student.
         """
-        self.enroll_student(self.STUDENT_INFO[0][0], self.STUDENT_INFO[0][1])
+        self.enroll_student(self.STUDENTS[0]['email'], self.STUDENTS[0]['password'])
         # Preparing imported resources
-        data = {}
-        data['flagged_accum_resources'] = {}
-        data['endorsed_recommendation_reasons'] = []
-        data['endorsed_recommendation_ids'] = []
-        data['deendorsed_recommendations'] = {}
-        data['recommendations'] = self.test_recommendations[self.resource_url[0]]
+        initial_configuration = {
+            'flagged_accum_resources': {},
+            'endorsed_recommendation_reasons': [],
+            'endorsed_recommendation_ids': [],
+            'deendorsed_recommendations': {},
+            'recommendations': self.test_recommendations[self.resource_url[0]]
+        }
         # Importing resources
-        f_handler = StringIO.StringIO(json.dumps(data, sort_keys=True))
+        f_handler = StringIO.StringIO(json.dumps(initial_configuration, sort_keys=True))
         f_handler.name = 'import_resources'
         url = self.get_handler_url('import_resources')
         resp = self.client.post(url, {'file': f_handler})
@@ -226,19 +230,21 @@ class TestRecommenderCreateFromEmpty(TestRecommender):
         """
         self.enroll_staff(self.staff_user)
         # Preparing imported resources
-        data = {}
-        data['flagged_accum_resources'] = {}
-        data['endorsed_recommendation_reasons'] = []
-        data['endorsed_recommendation_ids'] = []
-        data['deendorsed_recommendations'] = {}
-        data['recommendations'] = self.test_recommendations[self.resource_url[0]]
+        initial_configuration = {
+            'flagged_accum_resources': {},
+            'endorsed_recommendation_reasons': [],
+            'endorsed_recommendation_ids': [],
+            'deendorsed_recommendations': {},
+            'recommendations': self.test_recommendations[self.resource_url[0]]
+        }
         # Importing resources
-        f_handler = StringIO.StringIO(json.dumps(data, sort_keys=True))
+        f_handler = StringIO.StringIO(json.dumps(initial_configuration, sort_keys=True))
         f_handler.name = 'import_resources'
         url = self.get_handler_url('import_resources')
         resp = self.client.post(url, {'file': f_handler})
-        self.assertEqual(resp.content, json.dumps(data, sort_keys=True))
+        self.assertEqual(resp.content, json.dumps(initial_configuration, sort_keys=True))
         self.assert_request_status_code(200, self.course_url)
+
 
 class TestRecommenderWithResources(TestRecommender):
     """
@@ -259,21 +265,20 @@ class TestRecommenderWithResources(TestRecommender):
         self.logout()
         self.enroll_staff(self.staff_user)
         # Add resources, assume correct here, tested in test_add_resource
-        for resource, xblock_name in itertools.product(
-            self.test_recommendations.values(), self.XBLOCK_NAMES
-        ):
+        for resource, xblock_name in itertools.product(self.test_recommendations.values(), self.XBLOCK_NAMES):
             self.call_event('add_resource', resource, xblock_name)
 
     def generate_edit_resource(self, resource_id):
         """
-        Generate the resource for edit
+        Based on the given resource (specified by resource_id), this function
+        generate a new one for testing 'edit_resource' event
         """
-        event_data = {"id": resource_id}
+        resource = {"id": resource_id}
         edited_recommendations = {
             key: value + " edited" for key, value in self.test_recommendations[self.resource_id].iteritems()
         }
-        event_data.update(edited_recommendations)
-        return event_data
+        resource.update(edited_recommendations)
+        return resource
 
     def test_add_redundant_resource(self):
         """
@@ -328,9 +333,9 @@ class TestRecommenderWithResources(TestRecommender):
         rejected
         """
         for suffix in ['', '#IAmSuffix', '%23IAmSuffix']:
-            data = self.generate_edit_resource(self.resource_id)
-            data['url'] = self.resource_id_second + suffix
-            resp = self.call_event('edit_resource', data)
+            resource = self.generate_edit_resource(self.resource_id)
+            resource['url'] = self.resource_id_second + suffix
+            resp = self.call_event('edit_resource', resource)
             self.assertEqual(resp['error'], 'The resource you are attempting to provide has already existed')
             self.assertEqual(resp['dup_id'], self.resource_id_second)
             self.assert_request_status_code(200, self.course_url)
@@ -343,9 +348,9 @@ class TestRecommenderWithResources(TestRecommender):
         self.call_event('deendorse_resource', {"id": self.resource_id_second, 'reason': ''})
         err_msg = 'The resource you are attempting to provide has been de-endorsed by staff, because: .*'
         for suffix in ['', '#IAmSuffix', '%23IAmSuffix']:
-            data = self.generate_edit_resource(self.resource_id)
-            data['url'] = self.resource_id_second + suffix
-            resp = self.call_event('edit_resource', data)
+            resource = self.generate_edit_resource(self.resource_id)
+            resource['url'] = self.resource_id_second + suffix
+            resp = self.call_event('edit_resource', resource)
             self.assertRegexpMatches(resp['error'], err_msg)
             self.assertEqual(resp['dup_id'], self.resource_id_second)
             self.assert_request_status_code(200, self.course_url)
@@ -364,10 +369,10 @@ class TestRecommenderWithResources(TestRecommender):
         """
         Check whether changing the content (except for url) of resource is successful
         """
-        data = self.generate_edit_resource(self.resource_id)
+        resource = self.generate_edit_resource(self.resource_id)
         for suffix in ['', '#IAmSuffix', '%23IAmSuffix']:
-            data['url'] = self.resource_id + suffix
-            resp = self.call_event('edit_resource', data)
+            resource['url'] = self.resource_id + suffix
+            resp = self.call_event('edit_resource', resource)
             self.assertEqual(resp['Success'], True)
             self.assert_request_status_code(200, self.course_url)
 
@@ -386,9 +391,9 @@ class TestRecommenderWithResources(TestRecommender):
         Check whether changing the content of resource is successful in two
         different xblocks
         """
-        data = self.generate_edit_resource(self.resource_id)
+        resource = self.generate_edit_resource(self.resource_id)
         for xblock_name in self.XBLOCK_NAMES:
-            resp = self.call_event('edit_resource', data, xblock_name)
+            resp = self.call_event('edit_resource', resource, xblock_name)
             self.assertEqual(resp['Success'], True)
             self.assert_request_status_code(200, self.course_url)
 
@@ -396,27 +401,27 @@ class TestRecommenderWithResources(TestRecommender):
         """
         Flag a resource as problematic, without providing the reason
         """
-        data = {'id': self.resource_id, 'isProblematic': True, 'reason': ''}
+        resource = {'id': self.resource_id, 'isProblematic': True, 'reason': ''}
         # Test
-        self.check_event_ele_in_response('flag_resource', data, 'reason', '')
+        self.check_event_response_by_element('flag_resource', resource, 'reason', '')
 
     def test_flag_resource_w_reason(self):
         """
         Flag a resource as problematic, with providing the reason
         """
-        data = {'id': self.resource_id, 'isProblematic': True, 'reason': 'reason 0'}
+        resource = {'id': self.resource_id, 'isProblematic': True, 'reason': 'reason 0'}
         # Test
-        self.check_event_ele_in_response('flag_resource', data, 'reason', 'reason 0')
+        self.check_event_response_by_element('flag_resource', resource, 'reason', 'reason 0')
 
     def test_flag_resource_change_reason(self):
         """
         Flag a resource as problematic twice, with different reasons
         """
-        data = {'id': self.resource_id, 'isProblematic': True, 'reason': 'reason 0'}
-        self.call_event('flag_resource', data)
+        resource = {'id': self.resource_id, 'isProblematic': True, 'reason': 'reason 0'}
+        self.call_event('flag_resource', resource)
         # Test
-        data['reason'] = 'reason 1'
-        resp = self.call_event('flag_resource', data)
+        resource['reason'] = 'reason 1'
+        resp = self.call_event('flag_resource', resource)
         self.assertEqual(resp['oldReason'], 'reason 0')
         self.assertEqual(resp['reason'], 'reason 1')
         self.assert_request_status_code(200, self.course_url)
@@ -425,21 +430,21 @@ class TestRecommenderWithResources(TestRecommender):
         """
         Flag resources as problematic in two different xblocks
         """
-        data = {'id': self.resource_id, 'isProblematic': True, 'reason': 'reason 0'}
+        resource = {'id': self.resource_id, 'isProblematic': True, 'reason': 'reason 0'}
         # Test
         for xblock_name in self.XBLOCK_NAMES:
-            self.check_event_ele_in_response('flag_resource', data, 'reason', 'reason 0', xblock_name)
+            self.check_event_response_by_element('flag_resource', resource, 'reason', 'reason 0', xblock_name)
 
     def test_flag_resources_by_different_users(self):
         """
         Different users can't see the flag result of each other
         """
-        data = {'id': self.resource_id, 'isProblematic': True, 'reason': 'reason 0'}
-        self.call_event('flag_resource', data)
+        resource = {'id': self.resource_id, 'isProblematic': True, 'reason': 'reason 0'}
+        self.call_event('flag_resource', resource)
         self.logout()
-        self.enroll_student(self.STUDENT_INFO[0][0], self.STUDENT_INFO[0][1])
+        self.enroll_student(self.STUDENTS[0]['email'], self.STUDENTS[0]['password'])
         # Test
-        resp = self.call_event('flag_resource', data)
+        resp = self.call_event('flag_resource', resource)
         # The second user won't see the reason provided by the first user
         self.assertNotIn('oldReason', resp)
         self.assertEqual(resp['reason'], 'reason 0')
@@ -460,6 +465,7 @@ class TestRecommenderWithResources(TestRecommender):
         self.assertIn(self.resource_id, resp['export']['deendorsed_recommendations'])
         self.assert_request_status_code(200, self.course_url)
 
+
 @ddt
 class TestRecommenderVoteWithResources(TestRecommenderWithResources):
     """
@@ -477,8 +483,8 @@ class TestRecommenderVoteWithResources(TestRecommenderWithResources):
         """
         Vote a non-existing resource
         """
-        data = {"id": self.non_existing_resource_id, 'event': test_case['event']}
-        self.check_event_ele_in_response('handle_vote', data, 'error', 'The selected resource is not existing')
+        resource = {"id": self.non_existing_resource_id, 'event': test_case['event']}
+        self.check_event_response_by_element('handle_vote', resource, 'error', 'The selected resource is not existing')
 
     @data(
         {'event': 'recommender_upvote', 'new_votes': 1},
@@ -488,8 +494,8 @@ class TestRecommenderVoteWithResources(TestRecommenderWithResources):
         """
         Vote a resource
         """
-        data = {"id": self.resource_id, 'event': test_case['event']}
-        self.check_event_ele_in_response('handle_vote', data, 'newVotes', test_case['new_votes'])
+        resource = {"id": self.resource_id, 'event': test_case['event']}
+        self.check_event_response_by_element('handle_vote', resource, 'newVotes', test_case['new_votes'])
 
     @data(
         {'event': 'recommender_upvote', 'new_votes': 0},
@@ -499,10 +505,10 @@ class TestRecommenderVoteWithResources(TestRecommenderWithResources):
         """
         Vote a resource twice
         """
-        data = {"id": self.resource_id, 'event': test_case['event']}
-        self.call_event('handle_vote', data)
+        resource = {"id": self.resource_id, 'event': test_case['event']}
+        self.call_event('handle_vote', resource)
         # Test
-        self.check_event_ele_in_response('handle_vote', data, 'newVotes', test_case['new_votes'])
+        self.check_event_response_by_element('handle_vote', resource, 'newVotes', test_case['new_votes'])
 
     @data(
         {'event': 'recommender_upvote', 'new_votes': 1},
@@ -512,11 +518,11 @@ class TestRecommenderVoteWithResources(TestRecommenderWithResources):
         """
         Vote a resource thrice
         """
-        data = {"id": self.resource_id, 'event': test_case['event']}
+        resource = {"id": self.resource_id, 'event': test_case['event']}
         for _ in range(0, 2):
-            self.call_event('handle_vote', data)
+            self.call_event('handle_vote', resource)
         # Test
-        self.check_event_ele_in_response('handle_vote', data, 'newVotes', test_case['new_votes'])
+        self.check_event_response_by_element('handle_vote', resource, 'newVotes', test_case['new_votes'])
 
     @data(
         {'event': 'recommender_upvote', 'event_second': 'recommender_downvote', 'new_votes': -1},
@@ -526,11 +532,11 @@ class TestRecommenderVoteWithResources(TestRecommenderWithResources):
         """
         Switch the vote of a resource
         """
-        data = {"id": self.resource_id, 'event': test_case['event']}
-        self.call_event('handle_vote', data)
+        resource = {"id": self.resource_id, 'event': test_case['event']}
+        self.call_event('handle_vote', resource)
         # Test
-        data['event'] = test_case['event_second']
-        self.check_event_ele_in_response('handle_vote', data, 'newVotes', test_case['new_votes'])
+        resource['event'] = test_case['event_second']
+        self.check_event_response_by_element('handle_vote', resource, 'newVotes', test_case['new_votes'])
 
     @data(
         {'event': 'recommender_upvote', 'new_votes': 1},
@@ -540,11 +546,11 @@ class TestRecommenderVoteWithResources(TestRecommenderWithResources):
         """
         Vote two different resources
         """
-        data = {"id": self.resource_id, 'event': test_case['event']}
-        self.call_event('handle_vote', data)
+        resource = {"id": self.resource_id, 'event': test_case['event']}
+        self.call_event('handle_vote', resource)
         # Test
-        data['id'] = self.resource_id_second
-        self.check_event_ele_in_response('handle_vote', data, 'newVotes', test_case['new_votes'])
+        resource['id'] = self.resource_id_second
+        self.check_event_response_by_element('handle_vote', resource, 'newVotes', test_case['new_votes'])
 
     @data(
         {'event': 'recommender_upvote', 'new_votes': 1},
@@ -554,10 +560,10 @@ class TestRecommenderVoteWithResources(TestRecommenderWithResources):
         """
         Vote two resources in two different xblocks
         """
-        data = {"id": self.resource_id, 'event': test_case['event']}
-        self.call_event('handle_vote', data)
+        resource = {"id": self.resource_id, 'event': test_case['event']}
+        self.call_event('handle_vote', resource)
         # Test
-        self.check_event_ele_in_response('handle_vote', data, 'newVotes', test_case['new_votes'], self.XBLOCK_NAMES[1])
+        self.check_event_response_by_element('handle_vote', resource, 'newVotes', test_case['new_votes'], self.XBLOCK_NAMES[1])
 
     @data(
         {'event': 'recommender_upvote', 'new_votes': 2},
@@ -567,12 +573,13 @@ class TestRecommenderVoteWithResources(TestRecommenderWithResources):
         """
         Vote resource by two different users
         """
-        data = {"id": self.resource_id, 'event': test_case['event']}
-        self.call_event('handle_vote', data)
+        resource = {"id": self.resource_id, 'event': test_case['event']}
+        self.call_event('handle_vote', resource)
         self.logout()
-        self.enroll_student(self.STUDENT_INFO[0][0], self.STUDENT_INFO[0][1])
+        self.enroll_student(self.STUDENTS[0]['email'], self.STUDENTS[0]['password'])
         # Test
-        self.check_event_ele_in_response('handle_vote', data, 'newVotes', test_case['new_votes'])
+        self.check_event_response_by_element('handle_vote', resource, 'newVotes', test_case['new_votes'])
+
 
 @ddt
 class TestRecommenderStaffFeedbackWithResources(TestRecommenderWithResources):
@@ -588,8 +595,8 @@ class TestRecommenderStaffFeedbackWithResources(TestRecommenderWithResources):
         """
         Deendorse/endorse a non-existing resource
         """
-        data = {"id": self.non_existing_resource_id, 'reason': ''}
-        self.check_event_ele_in_response(test_case, data, 'error', 'The selected resource is not existing')
+        resource = {"id": self.non_existing_resource_id, 'reason': ''}
+        self.check_event_response_by_element(test_case, resource, 'error', 'The selected resource is not existing')
 
     @data(
         {'handler': 'deendorse_resource', 'key': 'Success', 'val': True},
@@ -599,8 +606,8 @@ class TestRecommenderStaffFeedbackWithResources(TestRecommenderWithResources):
         """
         Deendorse/endorse a resource
         """
-        data = {"id": self.resource_id, 'reason': ''}
-        self.check_event_ele_in_response(test_case['handler'], data, test_case['key'], test_case['val'])
+        resource = {"id": self.resource_id, 'reason': ''}
+        self.check_event_response_by_element(test_case['handler'], resource, test_case['key'], test_case['val'])
 
     @data(
         {'handler': 'deendorse_resource', 'key': 'error', 'val': 'The selected resource is not existing'},
@@ -610,10 +617,10 @@ class TestRecommenderStaffFeedbackWithResources(TestRecommenderWithResources):
         """
         Deendorse/endorse a resource twice
         """
-        data = {"id": self.resource_id, 'reason': ''}
-        self.call_event(test_case['handler'], data)
+        resource = {"id": self.resource_id, 'reason': ''}
+        self.call_event(test_case['handler'], resource)
         # Test
-        self.check_event_ele_in_response(test_case['handler'], data, test_case['key'], test_case['val'])
+        self.check_event_response_by_element(test_case['handler'], resource, test_case['key'], test_case['val'])
 
     @data(
         {'handler': 'deendorse_resource', 'key': 'error', 'val': 'The selected resource is not existing'},
@@ -623,11 +630,11 @@ class TestRecommenderStaffFeedbackWithResources(TestRecommenderWithResources):
         """
         Deendorse/endorse a resource thrice
         """
-        data = {"id": self.resource_id, 'reason': ''}
+        resource = {"id": self.resource_id, 'reason': ''}
         for _ in range(0, 2):
-            self.call_event(test_case['handler'], data)
+            self.call_event(test_case['handler'], resource)
         # Test
-        self.check_event_ele_in_response(test_case['handler'], data, test_case['key'], test_case['val'])
+        self.check_event_response_by_element(test_case['handler'], resource, test_case['key'], test_case['val'])
 
     @data(
         {'handler': 'deendorse_resource', 'key': 'Success', 'val': True},
@@ -639,8 +646,8 @@ class TestRecommenderStaffFeedbackWithResources(TestRecommenderWithResources):
         """
         self.call_event(test_case['handler'], {"id": self.resource_id, 'reason': ''})
         # Test
-        data = {"id": self.resource_id_second, 'reason': ''}
-        self.check_event_ele_in_response(test_case['handler'], data, test_case['key'], test_case['val'])
+        resource = {"id": self.resource_id_second, 'reason': ''}
+        self.check_event_response_by_element(test_case['handler'], resource, test_case['key'], test_case['val'])
 
     @data(
         {'handler': 'deendorse_resource', 'key': 'Success', 'val': True},
@@ -652,8 +659,8 @@ class TestRecommenderStaffFeedbackWithResources(TestRecommenderWithResources):
         """
         self.call_event(test_case['handler'], {"id": self.resource_id, 'reason': ''})
         # Test
-        data = {"id": self.resource_id, 'reason': ''}
-        self.check_event_ele_in_response(test_case['handler'], data, test_case['key'], test_case['val'], self.XBLOCK_NAMES[1])
+        resource = {"id": self.resource_id, 'reason': ''}
+        self.check_event_response_by_element(test_case['handler'], resource, test_case['key'], test_case['val'], self.XBLOCK_NAMES[1])
 
     @data(
         {'handler': 'deendorse_resource', 'key': 'error', 'val': 'Deendorse resource without permission'},
@@ -664,28 +671,11 @@ class TestRecommenderStaffFeedbackWithResources(TestRecommenderWithResources):
         Deendorse/endorse resource by a student
         """
         self.logout()
-        self.enroll_student(self.STUDENT_INFO[0][0], self.STUDENT_INFO[0][1])
+        self.enroll_student(self.STUDENTS[0]['email'], self.STUDENTS[0]['password'])
         # Test
-        data = {"id": self.resource_id, 'reason': ''}
-        self.check_event_ele_in_response(test_case['handler'], data, test_case['key'], test_case['val'])
+        resource = {"id": self.resource_id, 'reason': ''}
+        self.check_event_response_by_element(test_case['handler'], resource, test_case['key'], test_case['val'])
 
-class TestRecommenderUserIdentity(TestRecommender):
-    """
-    Check whether we can identify users correctly
-    """
-    def test_student_is_not_staff(self):
-        """
-        Verify student is not a staff
-        """
-        self.enroll_student(self.STUDENT_INFO[0][0], self.STUDENT_INFO[0][1])
-        self.check_event_ele_in_response('is_user_staff', {}, 'is_user_staff', False)
-
-    def test_staff_is_user_staff(self):
-        """
-        Verify staff is a staff
-        """
-        self.enroll_staff(self.staff_user)
-        self.check_event_ele_in_response('is_user_staff', {}, 'is_user_staff', True)
 
 @ddt
 class TestRecommenderFileUploading(TestRecommender):
