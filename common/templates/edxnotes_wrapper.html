@@ -1,9 +1,4 @@
 <%! import json %>
-<%! from student.models import anonymous_id_for_user %>
-<%
-    if user:
-        params.update({'user': anonymous_id_for_user(user, None)})
-%>
 <div id="edx-notes-wrapper-${uid}" class="edx-notes-wrapper">
     <div class="edx-notes-wrapper-content">${content}</div>
 </div>
