@@ -1007,7 +1007,6 @@ class ShoppingCartViewsTests(ModuleStoreTestCase):
         self.assertIsNotNone(item2.course_enrollment)
         self.assertEqual(item2.course_enrollment.course_id, self.testing_course.id)
 
-
     @patch('shoppingcart.views.render_to_response', render_mock)
     def test_show_receipt_success_with_valid_reg_code(self):
         self.add_course_to_user_cart(self.course_key)
