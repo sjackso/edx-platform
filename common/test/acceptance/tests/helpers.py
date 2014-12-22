@@ -169,15 +169,6 @@ def enable_css_animations(page):
     """)
 
 
-def create_user_partition_json(partition_id, name, description, groups, scheme="random"):
-    """
-    Helper method to create user partition JSON.
-    """
-    return UserPartition(
-        partition_id, name, description, groups, MockUserPartitionScheme(scheme)
-    ).to_json()
-
-
 class UniqueCourseTest(WebAppTest):
     """
     Test that provides a unique course ID.
