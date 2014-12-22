@@ -476,6 +476,7 @@ class GroupVisibility(CourseTestCase):
         self.set_group_access(self.vertical, {1: []})
         self.set_group_access(self.problem, {2: [3,4]})
 
+        # Note that "has_children_visible_to_specific_content_groups" only checks immediate children.
         self.assertFalse(utils.has_children_visible_to_specific_content_groups(self.sequential))
         self.assertTrue(utils.has_children_visible_to_specific_content_groups(self.vertical))
         self.assertFalse(utils.has_children_visible_to_specific_content_groups(self.html))
