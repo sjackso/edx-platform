@@ -1,10 +1,10 @@
 define([
     'js/edxnotes/utils/logger', 'js/spec/edxnotes/custom_matchers'
-], function(Logger, customMatchers) {
+], function(NotesLogger, customMatchers) {
     'use strict';
-    describe('Edxnotes logger', function() {
+    describe('Edxnotes NotesLogger', function() {
         var getLogger = function(id, mode) {
-            return Logger.getLogger(id, mode);
+            return NotesLogger.getLogger(id, mode);
         };
 
         beforeEach(function () {
