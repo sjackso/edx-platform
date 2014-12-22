@@ -740,11 +740,10 @@ class CourseRegistrationCode(models.Model):
         cart_items = cart.orderitem_set.all().select_subclasses()
         if cart_items:
             for item in cart_items:
-                enrollment = CourseEnrollment.enroll(cart.user, item.course_id)
+                CourseEnrollment.enroll(cart.user, item.course_id)
                 log.info("Enrolled '{0}' in free course '{1}'"
                          .format(cart.user.email, item.course_id))  # pylint: disable=no-member
                 item.status = 'purchased'
-                item.course_enrollment = enrollment
                 item.save()
 
             cart.status = 'purchased'
