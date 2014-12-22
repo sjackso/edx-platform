@@ -625,6 +625,18 @@ class IntegrationTest(testutil.TestCase, test.TestCase):
 
         self.assert_json_failure_response_is_missing_social_auth(student_views.login_user(strategy.request))
 
+    def test_register_redirects_if_account_not_active(self):
+        _, strategy = self.get_request_and_strategy(
+            auth_entry=pipeline.AUTH_ENTRY_REGISTER, redirect_uri='social:complete')
+        strategy.backend.auth_complete = mock.MagicMock(return_value=self.fake_auth_complete(strategy))
+        user = self.create_user_models_for_existing_account(strategy, 'user@example.com', 'password', self.get_username())
+
+        user.is_active = False
+        user.save()
+
+        mako_middleware_process_request(strategy.request)
+        self.assert_json_failure_response_is_inactive_account(student_views.login_user(strategy.request))
+
     def test_first_party_auth_trumps_third_party_auth_but_is_invalid_when_only_email_in_request(self):
         self.assert_first_party_auth_trumps_third_party_auth(email='user@example.com')
 

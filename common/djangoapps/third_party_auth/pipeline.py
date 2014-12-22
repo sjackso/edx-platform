@@ -536,6 +536,14 @@ def ensure_user_information(
     if is_register_2 and user_unset:
         return redirect(_create_redirect_url(AUTH_DISPATCH_URLS[AUTH_ENTRY_REGISTER_2], strategy))
 
+    # If the user is attempting to register, but already has an inactive account linked, redirect to
+    # Login.
+    if is_register and user_inactive:
+        return redirect(_create_redirect_url(AUTH_DISPATCH_URLS[AUTH_ENTRY_LOGIN], strategy))
+
+    if is_register_2 and user_inactive:
+        return redirect(_create_redirect_url(AUTH_DISPATCH_URLS[AUTH_ENTRY_LOGIN_2], strategy))
+
 
 def _create_redirect_url(url, strategy):
     """ Given a URL and a Strategy, construct the appropriate redirect URL.
