@@ -123,6 +123,14 @@ class EdxNotesDecoratorTest(TestCase):
         self.problem.system.is_author_mode = True
         self.assertEqual("original_get_html", self.problem.get_html())
 
+    def test_edxnotes_harvard_notes_enabled(self):
+        """
+        Tests if get_html is not wrapped when Harvard Annotation Tool is enabled.
+        """
+        self.course.advanced_modules = ["videoannotation", "imageannotation", "textannotation"]
+        enable_edxnotes_for_the_course(self.course, self.user.id)
+        self.assertEqual("original_get_html", self.problem.get_html())
+
 
 @skipUnless(settings.FEATURES["ENABLE_EDXNOTES"], "EdxNotes feature needs to be enabled.")
 class EdxNotesHelpersTest(ModuleStoreTestCase):
@@ -177,6 +185,22 @@ class EdxNotesHelpersTest(ModuleStoreTestCase):
         contain a tab with type "edxnotes."
         """
         self.course.tabs = []
+        self.assertFalse(helpers.is_feature_enabled(self.course))
+
+    def test_edxnotes_harvard_notes_enabled(self):
+        """
+        Tests that edxnotes are disabled when Harvard Annotation Tool is enabled.
+        """
+        self.course.advanced_modules = ["foo", "imageannotation", "boo"]
+        self.assertFalse(helpers.is_feature_enabled(self.course))
+
+        self.course.advanced_modules = ["foo", "boo", "videoannotation"]
+        self.assertFalse(helpers.is_feature_enabled(self.course))
+
+        self.course.advanced_modules = ["textannotation", "foo", "boo"]
+        self.assertFalse(helpers.is_feature_enabled(self.course))
+
+        self.course.advanced_modules = ["textannotation", "videoannotation", "imageannotation"]
         self.assertFalse(helpers.is_feature_enabled(self.course))
 
     def test_edxnotes_enabled(self):

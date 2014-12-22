@@ -174,7 +174,8 @@ class InheritanceMixin(XBlockMixin):
     )
     edxnotes = Boolean(
         display_name=_("Enable Notes"),
-        help=_("Enter true or false. If true, you can use the Notes for HTML components."),
+        help=_("Enter true or false. If true, you can use the Notes for HTML components. "
+               "Note: Harvard Annotation Tool must be disabled before start using this functionality."),
         default=False,
         scope=Scope.settings
     )
